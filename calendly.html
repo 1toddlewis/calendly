@@ -1,0 +1,91 @@
+<html>
+
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script>
+    function isCalendlyEvent(e) {
+      return e.data.event &&
+        e.data.event.indexOf('calendly.event_scheduled') === 0;
+    };
+
+    window.addEventListener(
+      'message',
+      function (e) {
+        if (isCalendlyEvent(e)) {
+          console.log(e.data);
+          submitForm(e.data);
+        }
+      }
+    );
+
+    // Post data when form is submitted
+    submitForm = async function (data) {
+      // Get data from query string
+      const queryParams = new URLSearchParams(document.location.search);
+      const userId = queryParams.get('userId');
+      const conversationId = queryParams.get('convId');
+      const botId = queryParams.get('botId');
+
+      // Get data from form
+      const eventURI = data.payload.event.uri;
+      const inviteeURI = data.payload.invitee.uri;
+
+      // use correct domain for your region
+      const domain = 'https://va.bc-intg.liveperson.net/thirdparty-services-0.1/webview';
+      // encode auth string
+      const encoder = new TextEncoder();
+      const authString = encoder.encode(`${conversationId} || ${botId}`);
+      const hashBuffer = await window.crypto.subtle.digest('SHA-256', authString);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const auth = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+      const res = await postData(domain, auth, {
+        botId,
+        conversationId,
+        userId,
+        message: "request successful",
+        contextVariables: [
+          { "name": "eventURI", "value": eventURI },
+          { "name": "inviteeURI", "value": inviteeURI }
+        ],
+      });
+    }
+
+    // Post data to Web View API
+    async function postData(url = '', auth, data = {}) {
+      const response = await fetch(url, {
+        method: 'POST',
+        mode: 'cors',
+        headers: {
+          'Authorization': auth,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+      return await response.json();
+    };
+  </script>
+</head>
+
+<body>
+  <!-- Calendly inline widget begin -->
+  <div class="calendly-inline-widget" style="min-width:320px;height:580px;" data-auto-load="false">
+    <script type="text/javascript" src="https://assets.calendly.com/assets/external/widget.js"></script>
+    <script>
+      const queryParams = new URLSearchParams(document.location.search);
+      const calendlyEventURI = queryParams.get('calendlyEventURI');
+      const visitorName = queryParams.get('name');
+      const visitorEmail = queryParams.get('email');
+      const calendlyOptions = {
+        url: `${decodeURIComponent(calendlyEventURI)}`,
+        prefill: {}
+      };
+      if (visitorName) calendlyOptions.prefill.name = decodeURIComponent(visitorName);
+      if (visitorEmail) calendlyOptions.prefill.email = decodeURIComponent(visitorEmail);
+      Calendly.initInlineWidget(calendlyOptions);
+    </script>
+  </div>
+  <!-- Calendly inline widget end -->
+</body>
+
+</html>
